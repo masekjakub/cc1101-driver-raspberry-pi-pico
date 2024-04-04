@@ -25,13 +25,14 @@ int main()
     printf("CC1101 test send\n");
     uint8_t addr = 1;
     auto cc1101 = CC1101(spi0, 17, 20, 21);
-    if(!cc1101.begin(addr))
+    if (!cc1101.begin(addr))
     {
         printf("CC1101 initialization failed\n");
         return 1;
     }
 
-    cc1101.set_preset(GFSK_100_kb);
+    cc1101.set_preset(ASK_OOK_4_8_kb);
+    cc1101.set_power(5);
     cc1101.receive();
 
     uint8_t data[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,

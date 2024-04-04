@@ -19,27 +19,24 @@
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
 
-/*_________________________________________________________________________________
-|                                                                                  |
-|                              PACKET STRUCTURE                                    |
-| _________________________________________________________________________________|
-|                                                 |          |                     |
-|                     HEADER                      |   DATA   |        STATUS       |
-|_________________________________________________|__________|_____________________|
-|   1B   |     1B       |     1B      |    1B     |    xB    |  1B   |     1B      |
-| LENGTH | DEST ADDRESS | SRC ADDRESS |    ACK    |    ...   | RSSI  | LQI+CRC(1b) |
-|________|______________|_____________|___________|__________|_______|____________*/
+/*__________________________________________________________________________________
+|                                                                                   |
+|                              PACKET STRUCTURE                                     |
+| __________________________________________________________________________________|
+|                                                 |          |                      |
+|                     HEADER                      |   DATA   |        STATUS        |
+|_________________________________________________|__________|______________________|
+|   1B   |     1B       |     1B      |    1B     |    xB    |   1B   |     1B      |
+| LENGTH | DEST ADDRESS | SRC ADDRESS |    ACK    |    ...   |  RSSI  | LQI+CRC(1b) |
+|________|______________|_____________|___________|__________|________|____________*/
 
 #define curMillis() to_ms_since_boot(get_absolute_time())
 
 /*----------------------[CC1101 - constants]----------------------------*/
 #define HEADER_LEN 4
 #define MAX_PACKET_LEN 58
-#define CFG_REGISTER_SIZE 47
 #define FIFO_SIZE 64
 /*-------------------------[END constants]-------------------------------*/
-
-
 
 /*----------------------[CC1101 - status byte]----------------------------*/
 #define FIFO_BYTES_AVAILABLE 0x0F
@@ -62,25 +59,27 @@
 
 /*------------------------[CC1101 - R/W addresses]----------------------------*/
 #define WRITE_BYTE 0x00
-#define READ_BYTE 0x80
 #define WRITE_BURST 0x40
+#define READ_BYTE 0x80
 #define READ_BURST 0xC0
 
 #define RX_FIFO 0x3F
 #define TX_FIFO 0x3F
-
 #define TX_FIFO_BURST 0x7F
 #define RX_FIFO_BURST 0xFF
 
-#define PATABLE_BURST 0x7E
 #define PATABLE_BYTE 0xFE
+#define PATABLE_BURST 0x7E
 /*-------------------------[END R/W addresses]-------------------------------*/
 
-/*------------------------[CC1101 - modulation]----------------------------*/
-#define ASK_OOK_4_8_kb 0x00
-#define GFSK_38_4_kb 0x01
-#define GFSK_100_kb 0x02
-#define MSK_500_kb 0x03
+/*------------------------[CC1101 - presets]----------------------------*/
+enum CC1101_Preset
+{
+    ASK_OOK_4_8_kb,
+    GFSK_38_4_kb,
+    GFSK_100_kb,
+    MSK_500_kb
+};
 /*-------------------------[END modulation]-------------------------------*/
 
 /*------------------------[CC1101 - command strobes]----------------------------*/
@@ -194,17 +193,20 @@ private:
     uint8_t my_addr;
     uint16_t ack_timeout_ms = 250;
     uint8_t ack_retries = 4;
+    uint8_t pa_table[8];
 
     void spi_write_reg(uint8_t, uint8_t);
     void spi_write_burst(uint8_t, uint8_t *, size_t);
     uint8_t spi_read_reg(uint8_t);
     void spi_read_burst(uint8_t, uint8_t *, size_t);
     uint8_t spi_write_strobe(uint8_t);
+    void flush_rx_fifo();
 
     double get_rssi_dbm(uint8_t rssi_dec);
 
 public:
     // NOTE PATABLE lost in sleep mode
+    // TODO set_datarate, wor, get rssi and lqi + crc,
     struct Packet
     {
         uint8_t src_address = 0;
@@ -229,6 +231,7 @@ public:
      *
      * @param my_addr The address to be assigned to the CC1101 module.
      * @return True if initialization is successful, false otherwise.
+     * @note Default settings are set (freq: 868MHz, power: 2, address_filtering: 3)
      */
     bool begin(uint8_t my_addr);
 
@@ -246,7 +249,7 @@ public:
      *
      * @param preset The preset value to set (ASK_OOK_4_8_kb, GFSK_38_4_kb, GFSK_100_kb, MSK_500_kb).
      */
-    void set_preset(uint8_t);
+    void set_preset(CC1101_Preset);
 
     /**
      * @brief Sets the frequency of the CC1101 module.

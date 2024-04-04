@@ -15,11 +15,11 @@ add_subdirectory(CC1101)
 
 # point out the CMake, where to find the executable source file
 add_executable(${PROJECT_NAME}_send
-        example_s.cpp
+        example_send.cpp
 )
 
 add_executable(${PROJECT_NAME}_recv
-        example_r.cpp
+        example_recv.cpp
 )
 
 # create map/bin/hex/uf2 files.

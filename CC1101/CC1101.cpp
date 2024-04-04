@@ -62,12 +62,13 @@ bool CC1101::begin(uint8_t my_addr)
 
     idle();
 
-    spi_write_reg(IOCFG0, 0x01); // assert GDO0 when RXFIFO is filled above treshold
-    spi_write_reg(MCSM1, 0x3C);
+    spi_write_reg(IOCFG0, 0x01); // assert GDO0 when RXFIFO is filled above treshold or end of packet received
+    spi_write_reg(MCSM1, 0x3C);  // stay in RX mode after packet received
 
     set_freq(ISM_868);
-    set_channel(0);
-    set_power(0);
+    memcpy(this->pa_table, PA_table_868, PA_TABLE_SIZE);
+
+    set_power(2);
     set_address(my_addr);
     set_address_filtering(3);
 
@@ -136,39 +137,27 @@ CC1101::Packet CC1101::read_packet()
 {
     Packet packet;
     uint8_t rx_bytes = spi_read_reg(RXBYTES);
-#ifdef DEBUG
-    printf("RXBYTES: %d\n", rx_bytes);
-#endif
+
     if (rx_bytes & OVERFLOW_FIFO_MASK || rx_bytes & BYTES_IN_FIFO_MASK < HEADER_LEN)
     {
-        idle();
-        spi_write_strobe(SFRX);
-        receive();
-#ifdef DEBUG
-        printf("Overflow or invalid packet\n");
-#endif
+        flush_rx_fifo();
         return packet;
     }
 
-    uint8_t packet_length = spi_read_reg(RX_FIFO);
-    if (packet_length < 3 || packet_length > MAX_PACKET_LEN + HEADER_LEN - 1)
+    packet.data_length = spi_read_reg(RX_FIFO) - HEADER_LEN + 1;
+    if (packet.data_length <= 0 || packet.data_length > MAX_PACKET_LEN)
     {
-        idle();
-        spi_write_strobe(SFRX);
-        receive();
-#ifdef DEBUG
-        printf("Invalid packet length\n");
-#endif
+        packet.data_length = 0;
+        flush_rx_fifo();
         return packet;
     }
 
+    uint8_t data[packet.data_length];
     uint8_t status[2];
-    uint8_t data[packet_length];
-    spi_read_burst(RX_FIFO_BURST, data, packet_length);
-    spi_read_burst(RX_FIFO_BURST, status, 2);
+    spi_read_burst(RX_FIFO_BURST, data, packet.data_length); // dest, src, ack flag, data
+    spi_read_burst(RX_FIFO_BURST, status, 2);                // rssi, lqi+crc
 
     packet.src_address = data[1];
-    packet.data_length = packet_length - HEADER_LEN + 1;
     memcpy(packet.data, &(data[HEADER_LEN - 1]), packet.data_length);
 
     packet.ack_flag = data[2];
@@ -176,9 +165,9 @@ CC1101::Packet CC1101::read_packet()
     packet.lqi = status[1] & 0x7F;
     packet.crc_ok = status[1] & 0x80;
 
-    if (data[2] == ACK_ENABLE)
+    if (packet.ack_flag == ACK_ENABLE)
     {
-        uint8_t ack_packet[4] = {3, packet.src_address, this->my_addr};
+        uint8_t ack_packet[HEADER_LEN] = {HEADER_LEN - 1, packet.src_address, this->my_addr};
         ack_packet[3] = (packet.crc_ok == 1 ? ACK_OK : ACK_FAIL);
         spi_write_burst(TX_FIFO_BURST, ack_packet, 4);
         transmit();
@@ -283,9 +272,9 @@ bool CC1101::send_packet(uint8_t address, uint8_t *data, uint8_t len, bool use_a
     return ack_ok;
 }
 
-void CC1101::set_preset(uint8_t mode)
+void CC1101::set_preset(CC1101_Preset preset)
 {
-    switch (mode)
+    switch (preset)
     {
     case ASK_OOK_4_8_kb:
         spi_write_reg(FSCTRL1, 0x06);
@@ -297,7 +286,6 @@ void CC1101::set_preset(uint8_t mode)
         spi_write_reg(MDMCFG0, 0xF8);
         spi_write_reg(DEVIATN, 0x34);
         spi_write_reg(FREND1, 0x56);
-        spi_write_reg(FREND0, 0x10);
         spi_write_reg(MCSM0, 0x18);
         spi_write_reg(FOCCFG, 0x16);
         spi_write_reg(BSCFG, 0x6C);
@@ -313,8 +301,8 @@ void CC1101::set_preset(uint8_t mode)
         spi_write_reg(TEST1, 0x35);
         spi_write_reg(TEST0, 0x09);
         spi_write_reg(FIFOTHR, 0x47);
-
         break;
+
     case GFSK_38_4_kb:
         spi_write_reg(FSCTRL1, 0x06);
         spi_write_reg(FSCTRL0, 0x00);
@@ -325,7 +313,6 @@ void CC1101::set_preset(uint8_t mode)
         spi_write_reg(MDMCFG0, 0xF8);
         spi_write_reg(DEVIATN, 0x34);
         spi_write_reg(FREND1, 0x56);
-        spi_write_reg(FREND0, 0x10);
         spi_write_reg(MCSM0, 0x18);
         spi_write_reg(FOCCFG, 0x16);
         spi_write_reg(BSCFG, 0x6C);
@@ -341,8 +328,8 @@ void CC1101::set_preset(uint8_t mode)
         spi_write_reg(TEST1, 0x35);
         spi_write_reg(TEST0, 0x09);
         spi_write_reg(FIFOTHR, 0x47);
-
         break;
+
     case GFSK_100_kb:
         spi_write_reg(FSCTRL1, 0x08);
         spi_write_reg(FSCTRL0, 0x00);
@@ -353,7 +340,6 @@ void CC1101::set_preset(uint8_t mode)
         spi_write_reg(MDMCFG0, 0xF8);
         spi_write_reg(DEVIATN, 0x47);
         spi_write_reg(FREND1, 0xB6);
-        spi_write_reg(FREND0, 0x10);
         spi_write_reg(MCSM0, 0x18);
         spi_write_reg(FOCCFG, 0x1D);
         spi_write_reg(BSCFG, 0x1C);
@@ -369,7 +355,6 @@ void CC1101::set_preset(uint8_t mode)
         spi_write_reg(TEST1, 0x35);
         spi_write_reg(TEST0, 0x09);
         spi_write_reg(FIFOTHR, 0x47);
-
         break;
 
     case MSK_500_kb:
@@ -382,26 +367,26 @@ void CC1101::set_preset(uint8_t mode)
         spi_write_reg(MDMCFG0, 0xF8);
         spi_write_reg(DEVIATN, 0x00);
         spi_write_reg(FREND1, 0xB6);
-        spi_write_reg(FREND0, 0x10);
         spi_write_reg(MCSM0, 0x18);
         spi_write_reg(FOCCFG, 0x1D);
         spi_write_reg(BSCFG, 0x1C);
         spi_write_reg(AGCCTRL2, 0xC7);
-        spi_write_reg(AGCCTRL1, 0x00); // 0x00
-        spi_write_reg(AGCCTRL0, 0xB0); // 0xB0
+        spi_write_reg(AGCCTRL1, 0x00);
+        spi_write_reg(AGCCTRL0, 0xB0);
         spi_write_reg(FSCAL3, 0xEA);
-        spi_write_reg(FSCAL2, 0x2A); // 0x2A
+        spi_write_reg(FSCAL2, 0x2A);
         spi_write_reg(FSCAL1, 0x00);
-        spi_write_reg(FSCAL0, 0x1F); // 0x1F
+        spi_write_reg(FSCAL0, 0x1F);
         spi_write_reg(FSTEST, 0x59);
-        spi_write_reg(TEST2, 0x88); // 0x88
-        spi_write_reg(TEST1, 0x31); // 0x31
-        spi_write_reg(TEST0, 0x09); // 0x09
+        spi_write_reg(TEST2, 0x88);
+        spi_write_reg(TEST1, 0x31);
+        spi_write_reg(TEST0, 0x09);
         spi_write_reg(FIFOTHR, 0x07);
-
         break;
+
     default:
-        printf("Invalid preset\n");
+        set_preset(ASK_OOK_4_8_kb);
+        printf("Invalid preset, used ASK_OOK_4_8_kb.\n");
     }
 }
 
@@ -416,26 +401,30 @@ void CC1101::set_freq(uint8_t band)
         freq[0] = 0x89;
         spi_write_burst(PATABLE_BURST, PA_table_315, PA_TABLE_SIZE);
         break;
+
     case ISM_433:
         freq[2] = 0x10;
         freq[1] = 0xB0;
         freq[0] = 0x71;
         spi_write_burst(PATABLE_BURST, PA_table_433, PA_TABLE_SIZE);
         break;
+
     case ISM_868:
         freq[2] = 0x21;
         freq[1] = 0x62;
         freq[0] = 0x76;
         spi_write_burst(PATABLE_BURST, PA_table_868, PA_TABLE_SIZE);
         break;
+
     case ISM_915:
         freq[2] = 0x23;
         freq[1] = 0x31;
         freq[0] = 0x3B;
         spi_write_burst(PATABLE_BURST, PA_table_915, PA_TABLE_SIZE);
         break;
+
     default:
-        printf("Invalid freq band\n");
+        printf("Invalid freq band.\n");
     }
 
     spi_write_reg(FREQ2, freq[2]);
@@ -455,6 +444,7 @@ void CC1101::set_address(uint8_t my_addr)
 
 void CC1101::set_power_table(uint8_t *pa_table)
 {
+    memcpy(this->pa_table, pa_table, PA_TABLE_SIZE);
     spi_write_burst(PATABLE_BURST, pa_table, PA_TABLE_SIZE);
 }
 
@@ -465,7 +455,7 @@ void CC1101::set_power(uint8_t power)
         printf("Invalid power level. Must be 0-7.\n");
         return;
     }
-    spi_write_reg(FREND0, power);
+    spi_write_reg(FREND0, power | 0x01);
 }
 
 void CC1101::set_address_filtering(uint8_t mode)
@@ -477,6 +467,8 @@ void CC1101::set_address_filtering(uint8_t mode)
     }
     spi_write_reg(PKTCTRL1, mode | 0x04);
 }
+
+/*-------------------------[PRIVATE METHODS]-------------------------*/
 
 void CC1101::spi_write_reg(uint8_t instruction, uint8_t data)
 {
@@ -529,4 +521,11 @@ uint8_t CC1101::spi_write_strobe(uint8_t strobe)
     spi_read_blocking(this->spi, strobe, &status, 1);
     gpio_put(this->ss_pin, 1);
     return status;
+}
+
+void CC1101::flush_rx_fifo()
+{
+    idle();
+    spi_write_strobe(SFRX);
+    receive();
 }
