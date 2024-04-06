@@ -145,17 +145,17 @@ CC1101::Packet CC1101::read_packet()
     }
 
     packet.data_length = spi_read_reg(RX_FIFO) - HEADER_LEN + 1;
-    if (packet.data_length <= 0 || packet.data_length > MAX_PACKET_LEN)
+    if (packet.data_length < 0 || packet.data_length > MAX_PACKET_LEN)
     {
         packet.data_length = 0;
         flush_rx_fifo();
         return packet;
     }
 
-    uint8_t data[packet.data_length];
+    uint8_t data[packet.data_length + HEADER_LEN - 1];
     uint8_t status[2];
-    spi_read_burst(RX_FIFO_BURST, data, packet.data_length); // dest, src, ack flag, data
-    spi_read_burst(RX_FIFO_BURST, status, 2);                // rssi, lqi+crc
+    spi_read_burst(RX_FIFO_BURST, data, packet.data_length + HEADER_LEN - 1); // dest, src, ack flag, data
+    spi_read_burst(RX_FIFO_BURST, status, 2);                                 // rssi, lqi+crc
 
     packet.src_address = data[1];
     memcpy(packet.data, &(data[HEADER_LEN - 1]), packet.data_length);
@@ -169,7 +169,8 @@ CC1101::Packet CC1101::read_packet()
     {
         uint8_t ack_packet[HEADER_LEN] = {HEADER_LEN - 1, packet.src_address, this->my_addr};
         ack_packet[3] = (packet.crc_ok == 1 ? ACK_OK : ACK_FAIL);
-        spi_write_burst(TX_FIFO_BURST, ack_packet, 4);
+
+        spi_write_burst(TX_FIFO_BURST, ack_packet, HEADER_LEN);
         transmit();
 
         while (get_state() != STATE_IDLE)

@@ -28,7 +28,7 @@ int main()
     }
 
     cc1101.set_preset(ASK_OOK_4_8_kb);
-    cc1101.set_power(5);
+    cc1101.set_power(7);
     cc1101.receive();
 
     uint8_t data[64] = {0};

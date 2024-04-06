@@ -32,7 +32,7 @@ int main()
     }
 
     cc1101.set_preset(ASK_OOK_4_8_kb);
-    cc1101.set_power(5);
+    cc1101.set_power(7);
     cc1101.receive();
 
     uint8_t data[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
