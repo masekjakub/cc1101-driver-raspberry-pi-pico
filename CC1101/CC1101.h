@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <cstring>
+#include <vector>
 #include <iostream>
 #include <bitset>
 #include "pico/stdlib.h"
@@ -184,29 +185,7 @@ static uint8_t PA_table_915[PA_TABLE_SIZE] = {0x03, 0x0E, 0x1E, 0x27, 0x8E, 0xCD
 
 class CC1101
 {
-
-private:
-    uint8_t ss_pin;
-    uint8_t gdo0_pin;
-    uint8_t gdo2_pin;
-    spi_inst_t *spi;
-    uint8_t my_addr;
-    uint16_t ack_timeout_ms = 250;
-    uint8_t ack_retries = 4;
-    uint8_t pa_table[8];
-
-    void spi_write_reg(uint8_t, uint8_t);
-    void spi_write_burst(uint8_t, uint8_t *, size_t);
-    uint8_t spi_read_reg(uint8_t);
-    void spi_read_burst(uint8_t, uint8_t *, size_t);
-    uint8_t spi_write_strobe(uint8_t);
-    void flush_rx_fifo();
-
-    double get_rssi_dbm(uint8_t rssi_dec);
-
 public:
-    // NOTE PATABLE lost in sleep mode
-    // TODO set_datarate, wor, get rssi and lqi + crc,
     struct Packet
     {
         uint8_t src_address = 0;
@@ -217,6 +196,9 @@ public:
         uint8_t lqi = 0;
         bool crc_ok = false;
     };
+
+    // NOTE PATABLE lost in sleep mode
+    // TODO set_datarate, wor
 
     CC1101(spi_inst_t *spi, uint8_t ss_pin, uint8_t gdo0_pin, uint8_t gdo2_pin = -1)
     {
@@ -374,6 +356,28 @@ public:
      * @return The address of the device.
      */
     uint8_t get_my_addr() { return my_addr; }
+    
+
+private:
+    uint8_t ss_pin;
+    uint8_t gdo0_pin;
+    uint8_t gdo2_pin;
+    spi_inst_t *spi;
+    uint8_t my_addr;
+    uint16_t ack_timeout_ms = 250;
+    uint8_t ack_retries = 4;
+    uint8_t pa_table[8];
+
+    std::vector<Packet> rx_packet_buffer; // buffer for incoming packets not received in read_packet
+    bool sending_now = false;             // flag indicating that the module is currently sending a packet
+
+    void spi_write_reg(uint8_t, uint8_t);
+    void spi_write_burst(uint8_t, uint8_t *, size_t);
+    uint8_t spi_read_reg(uint8_t);
+    void spi_read_burst(uint8_t, uint8_t *, size_t);
+    uint8_t spi_write_strobe(uint8_t);
+    void flush_rx_fifo();
+    double get_rssi_dbm(uint8_t rssi_dec);
 };
 
 #endif

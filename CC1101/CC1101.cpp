@@ -27,11 +27,12 @@ void CC1101::reset()
 bool CC1101::begin(uint8_t my_addr)
 {
 
-    if (my_addr >= 255 || my_addr < 0)
+    if (my_addr >= 255 || my_addr <= 0)
     {
         printf("Invalid address. Can be between 1 and 254.\n");
         return 0;
     }
+    this->my_addr = my_addr;
 
     gpio_init(this->ss_pin);
     gpio_init(this->gdo0_pin);
@@ -42,10 +43,6 @@ bool CC1101::begin(uint8_t my_addr)
     gpio_set_dir(this->gdo0_pin, GPIO_IN);
     if (this->gdo2_pin != -1)
         gpio_set_dir(this->gdo2_pin, GPIO_IN);
-
-    sleep_ms(10);
-
-    this->my_addr = my_addr;
 
     int speed;
     if ((speed = spi_init(this->spi, 8000000)) <= 0)
@@ -118,7 +115,7 @@ void CC1101::transmit()
 
 bool CC1101::packet_available()
 {
-    if (gpio_get(gdo0_pin) == 1)
+    if (gpio_get(gdo0_pin) == 1 || (this->rx_packet_buffer.size() > 0 && !this->sending_now))
     {
         return true;
     }
@@ -136,7 +133,15 @@ double CC1101::get_rssi_dbm(uint8_t rssi_dec)
 CC1101::Packet CC1101::read_packet()
 {
     Packet packet;
-    uint8_t rx_bytes = spi_read_reg(RXBYTES);
+
+    if (this->rx_packet_buffer.size() > 0 && !this->sending_now)
+    {
+        packet = this->rx_packet_buffer.back();
+        this->rx_packet_buffer.pop_back();
+        return packet;
+    }
+
+    uint8_t rx_bytes = spi_read_reg(RXBYTES); // read LENGTH byte
 
     if (rx_bytes & OVERFLOW_FIFO_MASK || rx_bytes & BYTES_IN_FIFO_MASK < HEADER_LEN)
     {
@@ -211,16 +216,18 @@ bool CC1101::send_packet(uint8_t address, uint8_t *data, uint8_t len, bool use_a
     }
 
 #ifdef DEBUG
-    printf("Sending packet: ");
-    for (int i = 0; i < len; i++)
+    printf("Sending data: ");
+    for (int i = 0; i < len - HEADER_LEN; i++)
     {
-        printf("%02X ", tx_buffer[i]);
+        printf("%02X ", tx_buffer[i] + HEADER_LEN);
     }
     printf("\n");
 #endif
 
+    this->sending_now = true;
     bool ack_ok = 0;
     uint8_t retries = ack_retries;
+    srand(curMillis());
     do
     {
 #ifdef DEBUG
@@ -239,11 +246,14 @@ bool CC1101::send_packet(uint8_t address, uint8_t *data, uint8_t len, bool use_a
         if (use_ack)
         {
             uint32_t time_sent = curMillis();
-            while (curMillis() - time_sent < ack_timeout_ms)
+
+            auto timeout = rand() % 100 + 30;
+            while (curMillis() - time_sent < timeout)
             {
                 if (packet_available())
                 {
                     Packet packet = read_packet();
+
                     if (packet.ack_flag == ACK_OK)
                     {
 #ifdef DEBUG
@@ -252,13 +262,14 @@ bool CC1101::send_packet(uint8_t address, uint8_t *data, uint8_t len, bool use_a
                         ack_ok = 1;
                         break;
                     }
-                    if (packet.ack_flag == ACK_FAIL)
+                    else if (packet.ack_flag == ACK_FAIL)
                     {
-#ifdef DEBUG
-                        printf("ACK FAIL\n");
-#endif
                         ack_ok = 0;
                         break;
+                    }
+                    else
+                    {
+                        this->rx_packet_buffer.push_back(packet);
                     }
                 }
                 sleep_us(500);
@@ -270,6 +281,7 @@ bool CC1101::send_packet(uint8_t address, uint8_t *data, uint8_t len, bool use_a
             ack_ok = 1;
         }
     } while (!ack_ok && retries);
+    this->sending_now = false;
     return ack_ok;
 }
 
