@@ -18,8 +18,6 @@ int main()
     gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
     bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
 
-    sleep_ms(2000);
-
     auto cc1101 = CC1101(spi0, 17, 20);
     if (!cc1101.begin(3))
     {
@@ -28,20 +26,17 @@ int main()
     }
 
     cc1101.set_preset(ASK_OOK_4_8_kb);
-    cc1101.set_power(7);
     cc1101.receive();
 
-    uint8_t data[64] = {0};
-    uint8_t len = 0;
     size_t count = 0;
     while (1)
     {
         if (cc1101.packet_available())
         {
             CC1101::Packet packet = cc1101.read_packet();
-            if (!packet.crc_ok)
+            if (!packet.valid)
             {
-                printf("CRC error\n");
+                printf("Invalid packet\n");
                 continue;
             }
 
@@ -53,9 +48,12 @@ int main()
             printf("\nSRC: %d\n", packet.src_address);
             printf("RSSI: %f\n", packet.rssi);
             printf("LQI: %d\n", packet.lqi);
-            printf("CRC: %d\n", packet.crc_ok);
+            printf("CRC: %d\n", packet.valid);
             printf("ACK_FLAG: %d\n", packet.ack_flag);
-            printf("Count: %d\n\n\n", ++count);
+            printf("# Count received: %d\n\n\n", ++count);
+
+            // Send same packet back
+            cc1101.send_packet(packet.src_address, packet.data, packet.data_length);
         }
         sleep_ms(10);
     }

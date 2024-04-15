@@ -10,6 +10,142 @@
 
 // #define DEBUG
 
+#define curMillis() to_ms_since_boot(get_absolute_time())
+
+/*----------------------------[CC1101 - constants]---------------------------*/
+#define HEADER_LEN_WITH_LENBYTE 4
+#define HEADER_LEN 3
+#define FIFO_SIZE 64
+/*------------------------------[END constants]------------------------------*/
+
+/*--------------------------[CC1101 - status byte]---------------------------*/
+#define FIFO_BYTES_AVAILABLE 0x0F
+#define STATE_IDLE 0x00
+#define STATE_RX 0x01
+#define STATE_TX 0x02
+#define STATE_FSTXON 0x03
+#define STATE_CALIBRATE 0x04
+#define STATE_SETTLING 0x05
+#define STATE_RXFIFO_OVERFLOW 0x06
+#define STATE_TXFIFO_UNDERFLOW 0x07
+/*-----------------------------[END status byte]-----------------------------*/
+
+/*------------------------------[CC1101 - ACK]-------------------------------*/
+#define ACK_DISABLE 0x00
+#define ACK_ENABLE 0x01
+#define ACK_OK 0x02
+#define ACK_FAIL 0x03
+/*---------------------------------[END ACK]---------------------------------*/
+
+/*------------------------[CC1101 - R/W addresses]---------------------------*/
+#define WRITE_BYTE 0x00
+#define WRITE_BURST 0x40
+#define READ_BYTE 0x80
+#define READ_BURST 0xC0
+
+#define RX_FIFO 0x3F
+#define TX_FIFO 0x3F
+#define TX_FIFO_BURST 0x7F
+#define RX_FIFO_BURST 0xFF
+
+#define PATABLE_BYTE 0xFE
+#define PATABLE_BURST 0x7E
+/*----------------------------[END R/W addresses]----------------------------*/
+
+/*------------------------[CC1101 - command strobes]-------------------------*/
+#define SRES 0x30    // Reset chip
+#define SFSTXON 0x31 // Enable/calibrate frequency synthesizer
+#define SXOFF 0x32   // Turn off crystal oscillator
+#define SCAL 0x33    // Calibrate frequency synthesizer and turn it off
+#define SRX 0x34     // Enable RX
+#define STX 0x35     // Enable TX
+#define SIDLE 0x36   // Exit RX / TX,  turn off frequency synthesizer
+#define SWOR 0x38    // Start automatic RX polling sequence
+#define SPWD 0x39    // Enter power down mode when CSn goes high
+#define SFRX 0x3A    // Flush the RX FIFO buffer
+#define SFTX 0x3B    // Flush the TX FIFO buffer
+#define SWORRST 0x3C // Reset real time clock to Event1 value
+#define SNOP 0x3D    // No operation (May be used to get access to the chip status byte)
+/*---------------------------[END command strobes]---------------------------*/
+
+/*--------------------[CC1101 - configuiration registers]--------------------*/
+#define IOCFG2 0x00   // GDO2 output pin configuration
+#define IOCFG1 0x01   // GDO1 output pin configuration
+#define IOCFG0 0x02   // GDO0 output pin configuration
+#define FIFOTHR 0x03  // RX FIFO and TX FIFO thresholds
+#define SYNC1 0x04    // Sync word, high byte
+#define SYNC0 0x05    // Sync word, low byte
+#define PKTLEN 0x06   // Packet length
+#define PKTCTRL1 0x07 // Packet automation control
+#define PKTCTRL0 0x08 // Packet automation control
+#define ADDR 0x09     // Device address
+#define CHANNR 0x0A   // Channel number
+#define FSCTRL1 0x0B  // Frequency synthesizer control
+#define FSCTRL0 0x0C  // Frequency synthesizer control
+#define FREQ2 0x0D    // Frequency control word, high byte
+#define FREQ1 0x0E    // Frequency control word, middle byte
+#define FREQ0 0x0F    // Frequency control word, low byte
+#define MDMCFG4 0x10  // Modem configuration
+#define MDMCFG3 0x11  // Modem configuration
+#define MDMCFG2 0x12  // Modem configuration
+#define MDMCFG1 0x13  // Modem configuration
+#define MDMCFG0 0x14  // Modem configuration
+#define DEVIATN 0x15  // Modem deviation setting
+#define MCSM2 0x16    // Main Radio Cntrl State Machine config
+#define MCSM1 0x17    // Main Radio Cntrl State Machine config
+#define MCSM0 0x18    // Main Radio Cntrl State Machine config
+#define FOCCFG 0x19   // Frequency Offset Compensation config
+#define BSCFG 0x1A    // Bit Synchronization configuration
+#define AGCCTRL2 0x1B // AGC control
+#define AGCCTRL1 0x1C // AGC control
+#define AGCCTRL0 0x1D // AGC control
+#define WOREVT1 0x1E  // High byte Event 0 timeout
+#define WOREVT0 0x1F  // Low byte Event 0 timeout
+#define WORCTRL 0x20  // Wake On Radio control
+#define FREND1 0x21   // Front end RX configuration
+#define FREND0 0x22   // Front end TX configuration
+#define FSCAL3 0x23   // Frequency synthesizer calibration
+#define FSCAL2 0x24   // Frequency synthesizer calibration
+#define FSCAL1 0x25   // Frequency synthesizer calibration
+#define FSCAL0 0x26   // Frequency synthesizer calibration
+#define RCCTRL1 0x27  // RC oscillator configuration
+#define RCCTRL0 0x28  // RC oscillator configuration
+#define FSTEST 0x29   // Frequency synthesizer cal control
+#define PTEST 0x2A    // Production test
+#define AGCTEST 0x2B  // AGC test
+#define TEST2 0x2C    // Various test settings
+#define TEST1 0x2D    // Various test settings
+#define TEST0 0x2E    // Various test settings
+/*----------------------[END configuiration registers]-----------------------*/
+
+/*------------------------[CC1101 - status register]-------------------------*/
+#define PARTNUM 0xF0            // Part number
+#define VERSION 0xF1            // Current version number
+#define FREQEST 0xF2            // Frequency offset estimate
+#define LQI 0xF3                // Demodulator estimate for link quality
+#define RSSI 0xF4               // Received signal strength indication
+#define MARCSTATE 0xF5          // Control state machine state
+#define WORTIME1 0xF6           // High byte of WOR timer
+#define WORTIME0 0xF7           // Low byte of WOR timer
+#define PKTSTATUS 0xF8          // Current GDOx status and packet status
+#define VCO_VC_DAC 0xF9         // Current setting from PLL cal module
+#define TXBYTES 0xFA            // Underflow and # of bytes in TXFIFO
+#define RXBYTES 0xFB            // Overflow and # of bytes in RXFIFO
+#define BYTES_IN_FIFO_MASK 0x7F // Mask for FIFO bytes
+#define OVERFLOW_FIFO_MASK 0x80 // Mask for FIFO overflow
+#define RCCTRL1_STATUS 0xFC     // Last RC Oscillator Calibration Result
+#define RCCTRL0_STATUS 0xFD     // Last RC Oscillator Calibration Result
+/*---------------------------[END status register]---------------------------*/
+
+/*----------------------------[CC1101 - PA table]----------------------------*/
+static uint8_t PA_table_315[] = {0x12, 0x0D, 0x1C, 0x34, 0x51, 0x85, 0xCB, 0xC2};
+static uint8_t PA_table_433[] = {0x12, 0x0E, 0x1D, 0x34, 0x60, 0x84, 0xC8, 0xC0};
+static uint8_t PA_table_868[] = {0x03, 0x0F, 0x1E, 0x27, 0x50, 0x81, 0xCB, 0xC2};
+static uint8_t PA_table_915[] = {0x03, 0x0E, 0x1E, 0x27, 0x8E, 0xCD, 0xC7, 0xC0};
+/*------------------------------[END PA table]-------------------------------*/
+
+
+/*-----------------------------[public methods]------------------------------*/
 void CC1101::reset()
 {
     gpio_put(this->ss_pin, 1);
@@ -65,7 +201,7 @@ bool CC1101::begin(uint8_t my_addr)
     set_freq(ISM_868);
     memcpy(this->pa_table, PA_table_868, PA_TABLE_SIZE);
 
-    set_power(2);
+    set_power(5);
     set_address(my_addr);
     set_address_filtering(3);
 
@@ -143,13 +279,13 @@ CC1101::Packet CC1101::read_packet()
 
     uint8_t rx_bytes = spi_read_reg(RXBYTES); // read LENGTH byte
 
-    if (rx_bytes & OVERFLOW_FIFO_MASK || rx_bytes & BYTES_IN_FIFO_MASK < HEADER_LEN)
+    if (rx_bytes & OVERFLOW_FIFO_MASK || rx_bytes & BYTES_IN_FIFO_MASK < HEADER_LEN_WITH_LENBYTE)
     {
         flush_rx_fifo();
         return packet;
     }
 
-    packet.data_length = spi_read_reg(RX_FIFO) - HEADER_LEN + 1;
+    packet.data_length = spi_read_reg(RX_FIFO) - HEADER_LEN;
     if (packet.data_length < 0 || packet.data_length > MAX_PACKET_LEN)
     {
         packet.data_length = 0;
@@ -157,25 +293,25 @@ CC1101::Packet CC1101::read_packet()
         return packet;
     }
 
-    uint8_t data[packet.data_length + HEADER_LEN - 1];
+    uint8_t data[packet.data_length + HEADER_LEN];
     uint8_t status[2];
-    spi_read_burst(RX_FIFO_BURST, data, packet.data_length + HEADER_LEN - 1); // dest, src, ack flag, data
-    spi_read_burst(RX_FIFO_BURST, status, 2);                                 // rssi, lqi+crc
+    spi_read_burst(RX_FIFO_BURST, data, packet.data_length + HEADER_LEN); // dest, src, ack flag, data
+    spi_read_burst(RX_FIFO_BURST, status, 2);                             // rssi, lqi+crc
 
     packet.src_address = data[1];
-    memcpy(packet.data, &(data[HEADER_LEN - 1]), packet.data_length);
+    memcpy(packet.data, &(data[HEADER_LEN]), packet.data_length);
 
     packet.ack_flag = data[2];
     packet.rssi = get_rssi_dbm(status[0]);
     packet.lqi = status[1] & 0x7F;
-    packet.crc_ok = status[1] & 0x80;
+    packet.valid = status[1] & 0x80;
 
-    if (packet.ack_flag == ACK_ENABLE)
+    if (packet.ack_flag == ACK_ENABLE && packet.valid == 1)
     {
-        uint8_t ack_packet[HEADER_LEN] = {HEADER_LEN - 1, packet.src_address, this->my_addr};
-        ack_packet[3] = (packet.crc_ok == 1 ? ACK_OK : ACK_FAIL);
+        uint8_t ack_packet[HEADER_LEN_WITH_LENBYTE] = {HEADER_LEN, packet.src_address, this->my_addr};
+        ack_packet[HEADER_LEN] = (packet.valid == 1 ? ACK_OK : ACK_FAIL);
 
-        spi_write_burst(TX_FIFO_BURST, ack_packet, HEADER_LEN);
+        spi_write_burst(TX_FIFO_BURST, ack_packet, HEADER_LEN_WITH_LENBYTE);
         transmit();
 
         while (get_state() != STATE_IDLE)
@@ -202,7 +338,7 @@ bool CC1101::send_packet(uint8_t address, uint8_t *data, uint8_t len, bool use_a
         spi_write_strobe(SFTX);
     }
 
-    len += HEADER_LEN;
+    len += HEADER_LEN_WITH_LENBYTE;
 
     uint8_t tx_buffer[len];
     tx_buffer[0] = len - 1; // length of payload (excluding length byte)
@@ -210,16 +346,16 @@ bool CC1101::send_packet(uint8_t address, uint8_t *data, uint8_t len, bool use_a
     tx_buffer[2] = this->my_addr;
     tx_buffer[3] = use_ack;
 
-    for (int i = HEADER_LEN; i < len; i++)
+    for (int i = HEADER_LEN_WITH_LENBYTE; i < len; i++)
     {
-        tx_buffer[i] = data[i - HEADER_LEN];
+        tx_buffer[i] = data[i - HEADER_LEN_WITH_LENBYTE];
     }
 
 #ifdef DEBUG
     printf("Sending data: ");
-    for (int i = 0; i < len - HEADER_LEN; i++)
+    for (int i = 0; i < len - HEADER_LEN_WITH_LENBYTE; i++)
     {
-        printf("%02X ", tx_buffer[i] + HEADER_LEN);
+        printf("%02X ", tx_buffer[i] + HEADER_LEN_WITH_LENBYTE);
     }
     printf("\n");
 #endif
@@ -247,7 +383,7 @@ bool CC1101::send_packet(uint8_t address, uint8_t *data, uint8_t len, bool use_a
         {
             uint32_t time_sent = curMillis();
 
-            auto timeout = rand() % 100 + 30;
+            auto timeout = rand() % 300 + 30;
             while (curMillis() - time_sent < timeout)
             {
                 if (packet_available())
@@ -480,12 +616,13 @@ void CC1101::set_address_filtering(uint8_t mode)
     }
     spi_write_reg(PKTCTRL1, mode | 0x04);
 }
+/*----------------------------[END public methods]---------------------------*/
 
-/*-------------------------[PRIVATE METHODS]-------------------------*/
+/*-----------------------------[private methods]-----------------------------*/
 
 void CC1101::spi_write_reg(uint8_t instruction, uint8_t data)
 {
-    uint8_t src[2] = {instruction | WRITE_BYTE, data};
+    uint8_t src[2] = {instruction, data};
 
     gpio_put(this->ss_pin, 0);
     spi_write_blocking(this->spi, src, 2);
@@ -542,3 +679,4 @@ void CC1101::flush_rx_fifo()
     spi_write_strobe(SFRX);
     receive();
 }
+/*---------------------------[END private methods]---------------------------*/
