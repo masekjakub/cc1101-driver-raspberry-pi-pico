@@ -39,7 +39,7 @@ int main()
     cc1101.receive();
 
     struct repeating_timer timer;
-    add_repeating_timer_ms(2000, &callback, nullptr, &timer);
+    add_repeating_timer_ms(1500, &callback, nullptr, &timer);
 
     size_t count = 0;
     uint8_t data[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
@@ -52,8 +52,12 @@ int main()
     {
         if (cc1101.packet_available())
         {
-            CC1101::Packet packet = cc1101.read_packet();
-            printf("Packet received: ");
+            Packet packet = cc1101.read_packet();
+            if (!packet.valid || packet.src_address != 3)
+            {
+                continue;
+            }
+            /*printf("Packet received: ");
             for (int i = 0; i < packet.data_length; i++)
             {
                 printf("%02X ", packet.data[i]);
@@ -62,14 +66,15 @@ int main()
             printf("RSSI: %f\n", packet.rssi);
             printf("LQI: %d\n", packet.lqi);
             printf("CRC: %d\n", packet.valid);
-            printf("ACK_FLAG: %d\n", packet.ack_flag);
+            printf("ACK_FLAG: %d\n", packet.ack_flag);*/
         }
 
         if (send_now)
         {
             send_now = false;
             count += cc1101.send_packet(3, data, 2, true);
-            count += cc1101.send_packet(3, data, 20);
+            count += cc1101.send_packet(3, data, 10);
+            count += cc1101.send_packet(3, data, 20, true);
             data[0]++;
 
             printf("# Count sent: %d\n\n", count);

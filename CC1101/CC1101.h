@@ -13,7 +13,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include <cstring>
+#include <string.h>
 #include <vector>
 #include <iostream>
 #include "pico/stdlib.h"
@@ -30,12 +30,13 @@
 | LENGTH | DEST ADDRESS | SRC ADDRESS |    ACK    |    ...   |  RSSI  | LQI+CRC(1b) |
 |________|______________|_____________|___________|__________|________|____________*/
 
-#define MAX_PACKET_LEN 58
-#define PA_TABLE_SIZE 8
+const int MAX_PACKET_LEN = 58;
+const int PA_TABLE_SIZE = 8;
 
 /*-----------------------------[CC1101 - presets]----------------------------*/
 enum CC1101_Preset
 {
+    GFSK_4_8_kb,
     ASK_OOK_4_8_kb,
     GFSK_38_4_kb,
     GFSK_100_kb,
@@ -53,23 +54,42 @@ enum CC1101_ISM
 };
 /*------------------------------[END ISM band]-------------------------------*/
 
+struct Packet
+{
+    uint8_t src_address = 0;
+    uint8_t data_length = 0;
+    uint8_t data[MAX_PACKET_LEN] = {0};
+    uint8_t ack_flag = 0;
+    double rssi = 0.0;
+    uint8_t lqi = 0;
+    bool valid = false;
+};
+
 class CC1101
 {
+private:
+    uint8_t ss_pin;
+    uint8_t gdo0_pin;
+    uint8_t gdo2_pin;
+    spi_inst_t *spi;
+    uint8_t my_addr;
+    uint8_t ack_retries;
+    uint8_t pa_table[PA_TABLE_SIZE];
+
+    std::vector<Packet> rx_packet_buffer; // buffer for incoming packets not received in read_packet
+    bool sending_now = false;             // flag indicating that the module is currently sending a packet
+
+    uint8_t get_state();
+    void flush_rx_fifo();
+    double get_rssi_dbm(uint8_t rssi_dec);
+
+    void spi_write_reg(const uint8_t, const uint8_t);
+    void spi_write_burst(const uint8_t, const uint8_t *, const size_t);
+    uint8_t spi_read_reg(const uint8_t);
+    void spi_read_burst(const uint8_t, uint8_t *, const size_t);
+    uint8_t spi_write_strobe(const uint8_t);
+
 public:
-    struct Packet
-    {
-        uint8_t src_address = 0;
-        uint8_t data_length = 0;
-        uint8_t data[MAX_PACKET_LEN] = {0};
-        uint8_t ack_flag = 0;
-        double rssi = 0.0;
-        uint8_t lqi = 0;
-        bool valid = false;
-    };
-
-    // NOTE PATABLE lost in sleep mode
-    // TODO set_datarate, wor
-
     CC1101(spi_inst_t *spi, uint8_t ss_pin, uint8_t gdo0_pin, uint8_t gdo2_pin = -1)
     {
         this->spi = spi;
@@ -143,7 +163,7 @@ public:
     void set_power_table(uint8_t *);
 
     /**
-     * @brief Sets the power level of the CC1101 module.
+     * @brief Sets the power level of the CC1101 module. Default is 5.
      *
      * This function allows you to set the power level of the CC1101 module.
      * The power level is index in the power table array.
@@ -153,7 +173,7 @@ public:
     void set_power(uint8_t);
 
     /**
-     * @brief Sets the address filtering mode for the CC1101 module.
+     * @brief Sets the address filtering mode for the CC1101 module. Default is 3.
      *
      * Determines how the CC1101 module should filter incoming packets based on the address.
      *
@@ -217,26 +237,11 @@ public:
      */
     uint8_t get_my_addr() { return my_addr; }
 
-private:
-    uint8_t ss_pin;
-    uint8_t gdo0_pin;
-    uint8_t gdo2_pin;
-    spi_inst_t *spi;
-    uint8_t my_addr;
-    uint8_t ack_retries = 4;
-    uint8_t pa_table[PA_TABLE_SIZE];
-
-    std::vector<Packet> rx_packet_buffer; // buffer for incoming packets not received in read_packet
-    bool sending_now = false;             // flag indicating that the module is currently sending a packet
-
-    uint8_t get_state();
-    void flush_rx_fifo();
-    double get_rssi_dbm(uint8_t rssi_dec);
-
-    void spi_write_reg(uint8_t, uint8_t);
-    void spi_write_burst(uint8_t, uint8_t *, size_t);
-    uint8_t spi_read_reg(uint8_t);
-    void spi_read_burst(uint8_t, uint8_t *, size_t);
-    uint8_t spi_write_strobe(uint8_t);
+    /**
+     * @brief Set the number of times the module should try to resend the packet if no acknowledgment is received. Default is 3.
+     *
+     * @param ack_retries The number of retries to set.
+     */
+    void set_ack_retries(uint8_t ack_retries) { this->ack_retries = ack_retries; }
 };
 #endif

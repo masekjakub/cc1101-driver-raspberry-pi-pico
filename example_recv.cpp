@@ -33,10 +33,9 @@ int main()
     {
         if (cc1101.packet_available())
         {
-            CC1101::Packet packet = cc1101.read_packet();
-            if (!packet.valid)
+            Packet packet = cc1101.read_packet();
+            if (!packet.valid || packet.src_address != 1)
             {
-                printf("Invalid packet\n");
                 continue;
             }
 
